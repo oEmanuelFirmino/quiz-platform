@@ -7,4 +7,6 @@ coverage/
 .env*
 !.env.example
 
-firebase-applet-config.*
+firebase-applet-config.json
+firebase-blueprints.json
+firestore.rules
