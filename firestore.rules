@@ -31,16 +31,41 @@ service cloud.firestore {
     }
     
     function isValidQuestion(data) {
-      return data.keys().hasAll(['quizId', 'ownerId', 'text', 'order', 'options', 'createdAt', 'updatedAt'])
-        && data.quizId is string && data.quizId.size() <= 128
-        && data.ownerId is string && data.ownerId.size() <= 128
-        && data.text is string && data.text.size() <= 500
-        && data.order is number
-        && data.options is list
-        && (data.options.size() == 0 || (data.options[0] is map && data.options[0].keys().hasAll(['id', 'text', 'points'])))
-        && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
-    }
+          // 1. Resolução de Tipo com Retrocompatibilidade
+          // Se o documento antigo não tiver a chave 'type', o motor assume 'choice'
+          let type = data.get('type', 'choice');
+          
+          // 2. Contrato Base (Transversal a qualquer tipo de pergunta)
+          let baseValid = data.keys().hasAll(['quizId', 'ownerId', 'text', 'order', 'createdAt', 'updatedAt'])
+            && data.quizId is string && data.quizId.size() <= 128
+            && data.ownerId is string && data.ownerId.size() <= 128
+            && data.text is string && data.text.size() <= 500
+            && data.order is number
+            && data.createdAt is timestamp
+            && data.updatedAt is timestamp;
+
+          // 3. Isolamento do Domínio: Múltipla Escolha
+          let validChoice = type == 'choice'
+            && data.keys().hasAll(['options'])
+            && data.options is list
+            && (data.options.size() == 0 || (
+                data.options[0] is map 
+                && data.options[0].keys().hasAll(['id', 'text', 'points'])
+              ));
+
+          // 4. Isolamento do Domínio: Escala Likert
+          let validScale = type == 'scale'
+            && data.keys().hasAll(['scaleConfig'])
+            && data.scaleConfig is map
+            && data.scaleConfig.keys().hasAll(['min', 'max', 'minLabel', 'maxLabel'])
+            && data.scaleConfig.min is number
+            && data.scaleConfig.max is number
+            && data.scaleConfig.minLabel is string && data.scaleConfig.minLabel.size() <= 50
+            && data.scaleConfig.maxLabel is string && data.scaleConfig.maxLabel.size() <= 50;
+
+          // 5. Resolução Algébrica (Curto-circuito)
+          return baseValid && (validChoice || validScale);
+        }
 
     function isValidSubmission(data) {
       return data.keys().hasAll(['quizId', 'ownerId', 'totalScore', 'responses', 'submittedAt'])

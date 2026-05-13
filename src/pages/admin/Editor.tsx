@@ -30,6 +30,38 @@ import {
 } from "lucide-react";
 import { downloadCSV } from "../../utils/export";
 
+// 1. Discriminador de Tipo (Polimorfismo)
+export type QuestionType = "choice" | "scale";
+
+// 2. Contrato de Domínio: Escala Likert
+export interface ScaleConfig {
+  min: number;
+  max: number;
+  minLabel: string;
+  maxLabel: string;
+}
+
+// 3. Contrato de Domínio: Múltipla Escolha
+export interface Option {
+  id: string;
+  text: string;
+  points: number;
+}
+
+// 4. Entidade Principal: Pergunta
+export interface Question {
+  qid?: string;
+  quizId: string;
+  ownerId: string;
+  text: string;
+  order: number;
+  type: QuestionType;
+  options: Option[];
+  scaleConfig?: ScaleConfig;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
 export default function Editor() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -80,14 +112,13 @@ export default function Editor() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // update quiz
       await updateDoc(doc(db, "quizzes", id!), {
         title: quiz.title,
         description: quiz.description || "",
         status: quiz.status,
         theme: quiz.theme || {},
         scoreMessages: quiz.scoreMessages || [],
-        updatedAt: serverTimestamp(), // <- CORRIGIDO
+        updatedAt: serverTimestamp(),
       });
 
       const batch = writeBatch(db);
@@ -105,23 +136,33 @@ export default function Editor() {
       });
 
       questions.forEach((q, index) => {
+        // Serializador polimórfico
+        const payload: any = {
+          text: q.text,
+          order: index,
+          type: q.type || "choice", // Fallback de segurança
+          options: q.type === "scale" ? [] : q.options, // Purga opções se for escala
+          updatedAt: serverTimestamp(),
+        };
+
+        if (q.type === "scale" && q.scaleConfig) {
+          payload.scaleConfig = {
+            min: Number(q.scaleConfig.min),
+            max: Number(q.scaleConfig.max),
+            minLabel: q.scaleConfig.minLabel,
+            maxLabel: q.scaleConfig.maxLabel,
+          };
+        }
+
         if (q.qid) {
-          batch.update(doc(db, "quizzes", id!, "questions", q.qid), {
-            text: q.text,
-            order: index,
-            options: q.options,
-            updatedAt: serverTimestamp(), // <- CORRIGIDO
-          });
+          batch.update(doc(db, "quizzes", id!, "questions", q.qid), payload);
         } else {
           const newRef = doc(collection(db, "quizzes", id!, "questions"));
           batch.set(newRef, {
             quizId: id,
             ownerId: user!.uid,
-            text: q.text,
-            order: index,
-            options: q.options,
-            createdAt: serverTimestamp(), // <- CORRIGIDO
-            updatedAt: serverTimestamp(), // <- CORRIGIDO
+            createdAt: serverTimestamp(),
+            ...payload,
           });
         }
       });
@@ -150,12 +191,39 @@ export default function Editor() {
       ...questions,
       {
         text: "",
+        type: "choice", // Tipo injetado nativamente
         options: [
           { id: Math.random().toString(36).substr(2, 9), text: "", points: 0 },
           { id: Math.random().toString(36).substr(2, 9), text: "", points: 0 },
         ],
       },
     ]);
+  };
+
+  const changeQuestionType = (qIndex: number, newType: QuestionType) => {
+    const q = [...questions];
+    q[qIndex].type = newType;
+    if (newType === "scale" && !q[qIndex].scaleConfig) {
+      q[qIndex].scaleConfig = {
+        min: 1,
+        max: 5,
+        minLabel: "Discordo",
+        maxLabel: "Concordo",
+      };
+    }
+    setQuestions(q);
+  };
+
+  const updateScaleConfig = (
+    qIndex: number,
+    field: keyof ScaleConfig,
+    value: string | number,
+  ) => {
+    const q = [...questions];
+    if (q[qIndex].scaleConfig) {
+      q[qIndex].scaleConfig = { ...q[qIndex].scaleConfig, [field]: value };
+    }
+    setQuestions(q);
   };
 
   const updateQuestionText = (index: number, text: string) => {
@@ -199,7 +267,6 @@ export default function Editor() {
   const loadSubmissions = async () => {
     setLoadingSubmissions(true);
     try {
-      // Cria o contrato de filtro exigido pela rule do Firestore
       const q = query(
         collection(db, "quizzes", id!, "submissions"),
         where("ownerId", "==", user!.uid),
@@ -329,20 +396,39 @@ export default function Editor() {
                   className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 group"
                 >
                   <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-gray-400 font-medium text-sm">
-                        #{qIndex + 1}
-                      </span>
-                      <input
-                        type="text"
-                        value={q.text}
-                        onChange={(e) =>
-                          updateQuestionText(qIndex, e.target.value)
-                        }
-                        placeholder="Digite a pergunta..."
-                        className="font-medium text-lg text-gray-900 w-full bg-transparent border-0 border-b-2 border-transparent focus:border-indigo-500 focus:ring-0 px-0 pb-1"
-                      />
+                    <div className="flex flex-col gap-2 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 font-medium text-sm">
+                          #{qIndex + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={q.text}
+                          onChange={(e) =>
+                            updateQuestionText(qIndex, e.target.value)
+                          }
+                          placeholder="Digite a pergunta..."
+                          className="font-medium text-lg text-gray-900 w-full bg-transparent border-0 border-b-2 border-transparent focus:border-indigo-500 focus:ring-0 px-0 pb-1"
+                        />
+                      </div>
+
+                      <div className="pl-6 mt-1">
+                        <select
+                          value={q.type || "choice"}
+                          onChange={(e) =>
+                            changeQuestionType(
+                              qIndex,
+                              e.target.value as QuestionType,
+                            )
+                          }
+                          className="text-sm border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 py-1.5 px-3"
+                        >
+                          <option value="choice">Múltipla Escolha</option>
+                          <option value="scale">Escala Linear (Likert)</option>
+                        </select>
+                      </div>
                     </div>
+
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => moveQuestionUp(qIndex)}
@@ -367,53 +453,137 @@ export default function Editor() {
                     </div>
                   </div>
 
-                  <div className="pl-6 space-y-3 mt-6">
-                    {q.options.map((opt: any, oIndex: number) => (
-                      <div key={opt.id} className="flex gap-3 items-center">
-                        <div className="w-4 h-4 rounded-full border-2 border-gray-300"></div>
-                        <input
-                          type="text"
-                          value={opt.text}
-                          onChange={(e) =>
-                            updateOptionText(qIndex, oIndex, e.target.value)
-                          }
-                          placeholder={`Opção ${oIndex + 1}`}
-                          className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:bg-white focus:ring-indigo-500 focus:border-indigo-500"
-                        />
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={opt.points}
-                            onChange={(e) =>
-                              updateOptionPoints(
-                                qIndex,
-                                oIndex,
-                                parseInt(e.target.value) || 0,
-                              )
-                            }
-                            className="w-20 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:bg-white focus:ring-indigo-500 focus:border-indigo-500"
-                            placeholder="Pts"
-                          />
-                          <span className="text-xs text-gray-500 font-medium">
-                            pts
-                          </span>
+                  <div className="pl-6 space-y-3 mt-4">
+                    {(!q.type || q.type === "choice") && (
+                      <>
+                        {q.options.map((opt: any, oIndex: number) => (
+                          <div key={opt.id} className="flex gap-3 items-center">
+                            <div className="w-4 h-4 rounded-full border-2 border-gray-300"></div>
+                            <input
+                              type="text"
+                              value={opt.text}
+                              onChange={(e) =>
+                                updateOptionText(qIndex, oIndex, e.target.value)
+                              }
+                              placeholder={`Opção ${oIndex + 1}`}
+                              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:bg-white focus:ring-indigo-500 focus:border-indigo-500"
+                            />
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={opt.points}
+                                onChange={(e) =>
+                                  updateOptionPoints(
+                                    qIndex,
+                                    oIndex,
+                                    parseInt(e.target.value) || 0,
+                                  )
+                                }
+                                className="w-20 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2 text-sm text-center focus:bg-white focus:ring-indigo-500 focus:border-indigo-500"
+                                placeholder="Pts"
+                              />
+                              <span className="text-xs text-gray-500 font-medium">
+                                pts
+                              </span>
+                            </div>
+                            {q.options.length > 2 && (
+                              <button
+                                onClick={() => removeOption(qIndex, oIndex)}
+                                className="text-gray-400 hover:text-red-500 p-1"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => addOption(qIndex)}
+                          className="text-sm font-medium text-indigo-600 mt-2 hover:text-indigo-800 flex items-center gap-1.5 ml-7"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Adicionar opção
+                        </button>
+                      </>
+                    )}
+
+                    {q.type === "scale" && q.scaleConfig && (
+                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                          Configuração da Escala
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Valor Mínimo (Numérico)
+                            </label>
+                            <input
+                              type="number"
+                              value={q.scaleConfig.min}
+                              onChange={(e) =>
+                                updateScaleConfig(
+                                  qIndex,
+                                  "min",
+                                  parseInt(e.target.value) || 0,
+                                )
+                              }
+                              className="w-full border-gray-300 rounded-md text-sm p-2 border"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Valor Máximo (Numérico)
+                            </label>
+                            <input
+                              type="number"
+                              value={q.scaleConfig.max}
+                              onChange={(e) =>
+                                updateScaleConfig(
+                                  qIndex,
+                                  "max",
+                                  parseInt(e.target.value) || 0,
+                                )
+                              }
+                              className="w-full border-gray-300 rounded-md text-sm p-2 border"
+                            />
+                          </div>
                         </div>
-                        {q.options.length > 2 && (
-                          <button
-                            onClick={() => removeOption(qIndex, oIndex)}
-                            className="text-gray-400 hover:text-red-500 p-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Label Mínima (Ex: Discordo)
+                            </label>
+                            <input
+                              type="text"
+                              value={q.scaleConfig.minLabel}
+                              onChange={(e) =>
+                                updateScaleConfig(
+                                  qIndex,
+                                  "minLabel",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full border-gray-300 rounded-md text-sm p-2 border"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">
+                              Label Máxima (Ex: Concordo)
+                            </label>
+                            <input
+                              type="text"
+                              value={q.scaleConfig.maxLabel}
+                              onChange={(e) =>
+                                updateScaleConfig(
+                                  qIndex,
+                                  "maxLabel",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full border-gray-300 rounded-md text-sm p-2 border"
+                            />
+                          </div>
+                        </div>
                       </div>
-                    ))}
-                    <button
-                      onClick={() => addOption(qIndex)}
-                      className="text-sm font-medium text-indigo-600 mt-2 hover:text-indigo-800 flex items-center gap-1.5 ml-7"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Adicionar opção
-                    </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -775,3 +945,4 @@ export default function Editor() {
     </div>
   );
 }
+ 
