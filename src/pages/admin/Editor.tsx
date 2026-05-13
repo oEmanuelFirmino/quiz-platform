@@ -20,7 +20,6 @@ import {
   Plus,
   Trash2,
   ArrowLeft,
-  GripVertical,
   Settings2,
   Eye,
   BarChart3,
@@ -30,10 +29,8 @@ import {
 } from "lucide-react";
 import { downloadCSV } from "../../utils/export";
 
-// 1. Discriminador de Tipo (Polimorfismo)
 export type QuestionType = "choice" | "scale";
 
-// 2. Contrato de Domínio: Escala Likert
 export interface ScaleConfig {
   min: number;
   max: number;
@@ -41,14 +38,12 @@ export interface ScaleConfig {
   maxLabel: string;
 }
 
-// 3. Contrato de Domínio: Múltipla Escolha
 export interface Option {
   id: string;
   text: string;
   points: number;
 }
 
-// 4. Entidade Principal: Pergunta
 export interface Question {
   qid?: string;
   quizId: string;
@@ -61,6 +56,14 @@ export interface Question {
   createdAt?: any;
   updatedAt?: any;
 }
+
+const AVAILABLE_LEAD_FIELDS = [
+  { id: "nome", label: "Nome Completo" },
+  { id: "email", label: "E-mail" },
+  { id: "telefone", label: "Telefone / WhatsApp" },
+  { id: "idade", label: "Idade" },
+  { id: "sexo", label: "Sexo" },
+];
 
 export default function Editor() {
   const { id } = useParams();
@@ -118,6 +121,7 @@ export default function Editor() {
         status: quiz.status,
         theme: quiz.theme || {},
         scoreMessages: quiz.scoreMessages || [],
+        leadCapture: quiz.leadCapture || { enabled: false, fields: [] }, // Injeção do contrato de Lead
         updatedAt: serverTimestamp(),
       });
 
@@ -136,12 +140,11 @@ export default function Editor() {
       });
 
       questions.forEach((q, index) => {
-        // Serializador polimórfico
         const payload: any = {
           text: q.text,
           order: index,
-          type: q.type || "choice", // Fallback de segurança
-          options: q.type === "scale" ? [] : q.options, // Purga opções se for escala
+          type: q.type || "choice",
+          options: q.type === "scale" ? [] : q.options,
           updatedAt: serverTimestamp(),
         };
 
@@ -191,7 +194,7 @@ export default function Editor() {
       ...questions,
       {
         text: "",
-        type: "choice", // Tipo injetado nativamente
+        type: "choice",
         options: [
           { id: Math.random().toString(36).substr(2, 9), text: "", points: 0 },
           { id: Math.random().toString(36).substr(2, 9), text: "", points: 0 },
@@ -271,7 +274,6 @@ export default function Editor() {
         collection(db, "quizzes", id!, "submissions"),
         where("ownerId", "==", user!.uid),
       );
-
       const subSnapshot = await getDocs(q);
       setSubmissions(subSnapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e) {
@@ -362,7 +364,6 @@ export default function Editor() {
       </div>
 
       <div className="flex gap-8 items-start relative max-w-5xl mx-auto w-full">
-        {/* Sidebar Tabs */}
         <div className="w-64 sticky top-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden text-sm">
             <button
@@ -386,7 +387,6 @@ export default function Editor() {
           </div>
         </div>
 
-        {/* Content Area */}
         <div className="flex-1 pb-24">
           {activeTab === "editor" && (
             <div className="space-y-6">
@@ -411,7 +411,6 @@ export default function Editor() {
                           className="font-medium text-lg text-gray-900 w-full bg-transparent border-0 border-b-2 border-transparent focus:border-indigo-500 focus:ring-0 px-0 pb-1"
                         />
                       </div>
-
                       <div className="pl-6 mt-1">
                         <select
                           value={q.type || "choice"}
@@ -513,7 +512,7 @@ export default function Editor() {
                         <div className="grid grid-cols-2 gap-4 mb-4">
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">
-                              Valor Mínimo (Numérico)
+                              Valor Mínimo
                             </label>
                             <input
                               type="number"
@@ -530,7 +529,7 @@ export default function Editor() {
                           </div>
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">
-                              Valor Máximo (Numérico)
+                              Valor Máximo
                             </label>
                             <input
                               type="number"
@@ -549,7 +548,7 @@ export default function Editor() {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">
-                              Label Mínima (Ex: Discordo)
+                              Label Mínima
                             </label>
                             <input
                               type="text"
@@ -566,7 +565,7 @@ export default function Editor() {
                           </div>
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">
-                              Label Máxima (Ex: Concordo)
+                              Label Máxima
                             </label>
                             <input
                               type="text"
@@ -604,6 +603,82 @@ export default function Editor() {
 
           {activeTab === "settings" && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
+              {/* NOVO BLOCO DE CAPTURA DE LEADS */}
+              <div className="pb-6 border-b border-gray-100">
+                <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500"></div>{" "}
+                  Formulário de Captura (Leads)
+                </h4>
+                <p className="text-sm text-gray-500 mb-4">
+                  Exija dados dos usuários antes de iniciarem o quiz.
+                </p>
+
+                <label className="flex items-center gap-3 mb-6 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={quiz.leadCapture?.enabled || false}
+                    onChange={(e) =>
+                      setQuiz({
+                        ...quiz,
+                        leadCapture: {
+                          ...(quiz.leadCapture || {}),
+                          enabled: e.target.checked,
+                        },
+                      })
+                    }
+                    className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium text-gray-800">
+                    Habilitar tela de captura
+                  </span>
+                </label>
+
+                {quiz.leadCapture?.enabled && (
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                      Campos obrigatórios
+                    </span>
+                    <div className="flex flex-wrap gap-4">
+                      {AVAILABLE_LEAD_FIELDS.map((field) => {
+                        const isChecked =
+                          quiz.leadCapture?.fields?.includes(field.id) || false;
+                        return (
+                          <label
+                            key={field.id}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${isChecked ? "bg-indigo-50 border-indigo-200" : "bg-white border-gray-200 hover:bg-gray-50"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const currentFields =
+                                  quiz.leadCapture?.fields || [];
+                                const newFields = e.target.checked
+                                  ? [...currentFields, field.id]
+                                  : currentFields.filter(
+                                      (f: string) => f !== field.id,
+                                    );
+                                setQuiz({
+                                  ...quiz,
+                                  leadCapture: {
+                                    ...quiz.leadCapture,
+                                    fields: newFields,
+                                  },
+                                });
+                              }}
+                              className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">
+                              {field.label}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Descrição / Instruções{" "}
@@ -637,7 +712,6 @@ export default function Editor() {
                       })
                     }
                     className="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-                    placeholder="https://sua-empresa.com/logo.png"
                   />
                 </div>
                 <div>
@@ -811,7 +885,6 @@ export default function Editor() {
                             setQuiz({ ...quiz, scoreMessages: newMsgs });
                           }}
                           className="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-                          placeholder="Ex: Parabéns! Excelente pontuação!"
                         />
                       </div>
                       <button
@@ -862,7 +935,6 @@ export default function Editor() {
                   </button>
                 )}
               </div>
-
               {loadingSubmissions ? (
                 <div className="text-gray-500 text-center py-6">
                   Carregando resultados...
@@ -898,21 +970,17 @@ export default function Editor() {
                       </div>
                     </div>
                   </div>
-
                   <div className="mt-8 border rounded-xl overflow-hidden">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Data
                           </th>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Contato
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Pontuação
                           </th>
                         </tr>
@@ -927,6 +995,22 @@ export default function Editor() {
                                 {sub.submittedAt && sub.submittedAt.toDate
                                   ? sub.submittedAt.toDate().toLocaleString()
                                   : "-"}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {sub.leadData?.nome || sub.leadData?.email ? (
+                                  <div>
+                                    <div className="font-medium text-gray-900">
+                                      {sub.leadData.nome || "-"}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {sub.leadData.email || ""}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="italic opacity-50">
+                                    Anônimo
+                                  </span>
+                                )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                 {sub.totalScore}
@@ -945,4 +1029,3 @@ export default function Editor() {
     </div>
   );
 }
- 

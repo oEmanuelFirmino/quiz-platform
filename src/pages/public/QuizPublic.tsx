@@ -12,12 +12,24 @@ import { db, handleFirestoreError, OperationType } from "../../firebase";
 import { motion, AnimatePresence } from "motion/react";
 import { Check } from "lucide-react";
 
+const FIELD_LABELS: Record<string, string> = {
+  nome: "Nome Completo",
+  email: "E-mail",
+  telefone: "Telefone / WhatsApp",
+  idade: "Idade",
+  sexo: "Sexo",
+};
+
 export default function QuizPublic() {
   const { id } = useParams();
   const [quiz, setQuiz] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(-1);
+  const [showLeadForm, setShowLeadForm] = useState(false); // NOVO: Controle de interceptação
+  const [leadData, setLeadData] = useState<Record<string, string>>({}); // NOVO: Armazena o lead
+
   const [responses, setResponses] = useState<
     Record<string, { id: string; points: number }>
   >({});
@@ -48,7 +60,21 @@ export default function QuizPublic() {
     fetchQuiz();
   }, [id]);
 
-  const handleStart = () => setCurrentQuestionIndex(0);
+  const handleStart = () => {
+    // Interceptação de Fluxo: Se o quiz exigir leads, mostramos o formulário. Senão, vamos direto.
+    if (quiz.leadCapture?.enabled && quiz.leadCapture?.fields?.length > 0) {
+      setShowLeadForm(true);
+    } else {
+      setCurrentQuestionIndex(0);
+    }
+  };
+
+  const handleLeadSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // A validação de preenchimento (required) já é feita nativamente pelo HTML5 no formulário.
+    setShowLeadForm(false);
+    setCurrentQuestionIndex(0);
+  };
 
   const handleSelectOption = (questionId: string, option: any) => {
     setResponses((prev) => ({
@@ -76,6 +102,7 @@ export default function QuizPublic() {
           ownerId: quiz.ownerId,
           totalScore: finalScore,
           responses: parsedResponses,
+          leadData: leadData, // NOVO: Anexando os dados coletados na submissão
           submittedAt: serverTimestamp(),
         });
       } catch (error) {
@@ -144,7 +171,8 @@ export default function QuizPublic() {
 
         <div className="flex-1 flex flex-col justify-center max-w-2xl w-full mx-auto">
           <AnimatePresence mode="wait">
-            {currentQuestionIndex === -1 && (
+            {/* ETAPA 1: TELA DE START */}
+            {currentQuestionIndex === -1 && !showLeadForm && (
               <motion.div
                 key="start"
                 initial={{ opacity: 0, y: 20 }}
@@ -170,6 +198,94 @@ export default function QuizPublic() {
               </motion.div>
             )}
 
+            {/* ETAPA INTERMEDIÁRIA: CAPTURA DE LEADS */}
+            {currentQuestionIndex === -1 && showLeadForm && (
+              <motion.div
+                key="lead"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20, filter: "blur(4px)" }}
+                className="w-full bg-white p-8 sm:p-10 rounded-3xl shadow-xl max-w-lg mx-auto"
+                style={{ color: "#111827" }}
+              >
+                <h2 className="text-2xl sm:text-3xl font-bold mb-2">
+                  Antes de começarmos...
+                </h2>
+                <p className="text-gray-500 mb-8">
+                  Por favor, preencha os dados abaixo para iniciar o quiz.
+                </p>
+
+                <form onSubmit={handleLeadSubmit} className="space-y-5">
+                  {quiz.leadCapture.fields.map((field: string) => (
+                    <div key={field}>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        {FIELD_LABELS[field]}
+                      </label>
+
+                      {field === "sexo" ? (
+                        <select
+                          required
+                          value={leadData[field] || ""}
+                          onChange={(e) =>
+                            setLeadData({
+                              ...leadData,
+                              [field]: e.target.value,
+                            })
+                          }
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                        >
+                          <option value="">Selecione...</option>
+                          <option value="Feminino">Feminino</option>
+                          <option value="Masculino">Masculino</option>
+                          <option value="Outro">Outro</option>
+                          <option value="Prefiro não informar">
+                            Prefiro não informar
+                          </option>
+                        </select>
+                      ) : field === "idade" ? (
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          max="120"
+                          value={leadData[field] || ""}
+                          onChange={(e) =>
+                            setLeadData({
+                              ...leadData,
+                              [field]: e.target.value,
+                            })
+                          }
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                        />
+                      ) : (
+                        <input
+                          type={field === "email" ? "email" : "text"}
+                          required
+                          value={leadData[field] || ""}
+                          onChange={(e) =>
+                            setLeadData({
+                              ...leadData,
+                              [field]: e.target.value,
+                            })
+                          }
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-base focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                        />
+                      )}
+                    </div>
+                  ))}
+
+                  <button
+                    type="submit"
+                    className="w-full mt-8 px-8 py-4 rounded-xl text-white font-medium text-lg transition-transform hover:scale-[1.02] shadow-md"
+                    style={{ backgroundColor: "var(--c-btn)" }}
+                  >
+                    Ir para as perguntas
+                  </button>
+                </form>
+              </motion.div>
+            )}
+
+            {/* ETAPA 2: RENDERIZAÇÃO DAS PERGUNTAS */}
             {currentQ && (
               <motion.div
                 key={`q-${currentQuestionIndex}`}
@@ -186,9 +302,6 @@ export default function QuizPublic() {
                   {currentQ.text}
                 </h2>
 
-                {/* RENDERIZAÇÃO POLIMÓRFICA */}
-
-                {/* TIPO: MÚLTIPLA ESCOLHA */}
                 {(!currentQ.type || currentQ.type === "choice") && (
                   <div className="space-y-3">
                     {currentQ.options.map((opt: any) => {
@@ -220,7 +333,6 @@ export default function QuizPublic() {
                   </div>
                 )}
 
-                {/* TIPO: ESCALA LIKERT */}
                 {currentQ.type === "scale" && currentQ.scaleConfig && (
                   <div className="mt-8">
                     <div className="flex justify-between text-sm font-semibold opacity-70 mb-6 px-1">
@@ -245,7 +357,7 @@ export default function QuizPublic() {
                             key={val}
                             onClick={() =>
                               handleSelectOption(currentQ.id, {
-                                id: `scale-val-${val}`, // ID gerado dinamicamente para satisfazer o contrato de respostas
+                                id: `scale-val-${val}`,
                                 points: val,
                               })
                             }
@@ -286,6 +398,7 @@ export default function QuizPublic() {
               </motion.div>
             )}
 
+            {/* ETAPA 3: CONCLUSÃO */}
             {currentQuestionIndex === questions.length && (
               <motion.div
                 key="end"
