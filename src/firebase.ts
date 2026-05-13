@@ -1,12 +1,24 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
 
+// Configuração explícita do seu projeto no Firebase Console
+const firebaseConfig = {
+  apiKey: "AIzaSyBNCLn0E84js0QHVWas2mJwjrBLp0m_7hc",
+  authDomain: "teste-fdd94.firebaseapp.com",
+  projectId: "teste-fdd94",
+  storageBucket: "teste-fdd94.firebasestorage.app",
+  messagingSenderId: "682078835964",
+  appId: "1:682078835964:web:e179e591456aa867b0f379",
+  measurementId: "G-CG3DB91D3C"
+};
+
+// Inicialização dos módulos centrais
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app); // Simplificado: assume o banco de dados '(default)'
 export const auth = getAuth(app);
 
+// Tipagens e utilitários de erro mantidos
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
