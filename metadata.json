@@ -1,0 +1,6 @@
+{
+  "name": "QuizPlatform",
+  "description": "Plataforma de criação e gerenciamento de quizzes interativos com pontuação.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

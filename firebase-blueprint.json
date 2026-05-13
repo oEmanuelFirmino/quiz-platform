@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile, primarily to identify administrators.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Quiz": {
+      "title": "Quiz",
+      "description": "A quiz entity containing settings and theme.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "theme": {
+          "type": "object",
+          "properties": {
+            "primaryColor": { "type": "string" },
+            "secondaryColor": { "type": "string" },
+            "bgColor": { "type": "string" },
+            "buttonColor": { "type": "string" },
+            "textColor": { "type": "string" },
+            "logoUrl": { "type": "string" }
+          }
+        },
+        "scoreMessages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "minScore": { "type": "number" },
+              "maxScore": { "type": "number" },
+              "message": { "type": "string" }
+            }
+          }
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "ownerId", "status", "createdAt", "updatedAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "A single question belonging to a quiz.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "order": { "type": "number" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "points": { "type": "number" }
+            },
+            "required": ["id", "text", "points"]
+          }
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["text", "order", "options", "createdAt", "updatedAt"]
+    },
+    "Submission": {
+      "title": "Submission",
+      "description": "A completed quiz submission by a user.",
+      "type": "object",
+      "properties": {
+        "totalScore": { "type": "number" },
+        "responses": {
+          "type": "object",
+          "description": "Map of question ID to selected option ID"
+        },
+        "submittedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["totalScore", "responses", "submittedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "quizzes/{quizId}": {
+      "schema": "Quiz",
+      "description": "Top-level collection for all quizzes."
+    },
+    "quizzes/{quizId}/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Questions that belong to a specific quiz."
+    },
+    "quizzes/{quizId}/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Submissions for a specific quiz."
+    }
+  }
+}
