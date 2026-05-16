@@ -27,8 +27,8 @@ export default function QuizPublic() {
   const [loading, setLoading] = useState(true);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(-1);
-  const [showLeadForm, setShowLeadForm] = useState(false); // NOVO: Controle de interceptação
-  const [leadData, setLeadData] = useState<Record<string, string>>({}); // NOVO: Armazena o lead
+  const [showLeadForm, setShowLeadForm] = useState(false);
+  const [leadData, setLeadData] = useState<Record<string, string>>({});
 
   const [responses, setResponses] = useState<
     Record<string, { id: string; points: number }>
@@ -61,7 +61,6 @@ export default function QuizPublic() {
   }, [id]);
 
   const handleStart = () => {
-    // Interceptação de Fluxo: Se o quiz exigir leads, mostramos o formulário. Senão, vamos direto.
     if (quiz.leadCapture?.enabled && quiz.leadCapture?.fields?.length > 0) {
       setShowLeadForm(true);
     } else {
@@ -71,7 +70,6 @@ export default function QuizPublic() {
 
   const handleLeadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // A validação de preenchimento (required) já é feita nativamente pelo HTML5 no formulário.
     setShowLeadForm(false);
     setCurrentQuestionIndex(0);
   };
@@ -102,7 +100,7 @@ export default function QuizPublic() {
           ownerId: quiz.ownerId,
           totalScore: finalScore,
           responses: parsedResponses,
-          leadData: leadData, // NOVO: Anexando os dados coletados na submissão
+          leadData: leadData,
           submittedAt: serverTimestamp(),
         });
       } catch (error) {
@@ -433,22 +431,22 @@ export default function QuizPublic() {
                 {quiz.scoreMessages &&
                   Array.isArray(quiz.scoreMessages) &&
                   (() => {
-                    const msg = quiz.scoreMessages.find(
-                      (m: any) => score >= m.minScore && score <= m.maxScore,
-                    );
+                    const msg = quiz.scoreMessages.find((m: any) => {
+                      const scoreMatch =
+                        score >= m.minScore && score <= m.maxScore;
+                      const genderMatch =
+                        !m.genderFilter ||
+                        m.genderFilter === "all" ||
+                        m.genderFilter === leadData?.sexo;
+                      return scoreMatch && genderMatch;
+                    });
+
                     if (msg)
                       return (
                         <p className="text-lg text-gray-600">{msg.message}</p>
                       );
                     return null;
                   })()}
-
-                <button
-                  onClick={() => window.location.reload()}
-                  className="mt-10 px-6 py-3 rounded-xl border border-gray-200 font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Refazer quiz
-                </button>
               </motion.div>
             )}
           </AnimatePresence>

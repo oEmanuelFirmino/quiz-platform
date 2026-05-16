@@ -121,7 +121,7 @@ export default function Editor() {
         status: quiz.status,
         theme: quiz.theme || {},
         scoreMessages: quiz.scoreMessages || [],
-        leadCapture: quiz.leadCapture || { enabled: false, fields: [] }, // Injeção do contrato de Lead
+        leadCapture: quiz.leadCapture || { enabled: false, fields: [] },
         updatedAt: serverTimestamp(),
       });
 
@@ -603,10 +603,9 @@ export default function Editor() {
 
           {activeTab === "settings" && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
-              {/* NOVO BLOCO DE CAPTURA DE LEADS */}
               <div className="pb-6 border-b border-gray-100">
                 <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-indigo-500"></div>{" "}
+                  <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
                   Formulário de Captura (Leads)
                 </h4>
                 <p className="text-sm text-gray-500 mb-4">
@@ -681,8 +680,8 @@ export default function Editor() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Descrição / Instruções{" "}
-                  <span className="text-gray-400 font-normal text-xs">
+                  Descrição / Instruções
+                  <span className="text-gray-400 font-normal text-xs ml-1">
                     (Aparece na tela inicial)
                   </span>
                 </label>
@@ -841,10 +840,13 @@ export default function Editor() {
                 </h4>
                 <div className="space-y-3">
                   {(quiz.scoreMessages || []).map((msg: any, i: number) => (
-                    <div key={i} className="flex gap-3 items-end">
-                      <div>
+                    <div
+                      key={i}
+                      className="flex gap-3 items-end flex-wrap sm:flex-nowrap"
+                    >
+                      <div className="w-20">
                         <label className="block text-xs text-gray-500 mb-1">
-                          Mín (pontos)
+                          Mín (pts)
                         </label>
                         <input
                           type="number"
@@ -854,12 +856,12 @@ export default function Editor() {
                             newMsgs[i].minScore = parseInt(e.target.value) || 0;
                             setQuiz({ ...quiz, scoreMessages: newMsgs });
                           }}
-                          className="w-20 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-center"
+                          className="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-center"
                         />
                       </div>
-                      <div>
+                      <div className="w-20">
                         <label className="block text-xs text-gray-500 mb-1">
-                          Máx (pontos)
+                          Máx (pts)
                         </label>
                         <input
                           type="number"
@@ -869,10 +871,30 @@ export default function Editor() {
                             newMsgs[i].maxScore = parseInt(e.target.value) || 0;
                             setQuiz({ ...quiz, scoreMessages: newMsgs });
                           }}
-                          className="w-20 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-center"
+                          className="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border text-center"
                         />
                       </div>
-                      <div className="flex-1">
+
+                      <div className="w-28">
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Alvo (Sexo)
+                        </label>
+                        <select
+                          value={msg.genderFilter || "all"}
+                          onChange={(e) => {
+                            const newMsgs = [...(quiz.scoreMessages || [])];
+                            newMsgs[i].genderFilter = e.target.value;
+                            setQuiz({ ...quiz, scoreMessages: newMsgs });
+                          }}
+                          className="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border bg-white"
+                        >
+                          <option value="all">Todos</option>
+                          <option value="Masculino">Masculino</option>
+                          <option value="Feminino">Feminino</option>
+                        </select>
+                      </div>
+
+                      <div className="flex-1 min-w-[200px]">
                         <label className="block text-xs text-gray-500 mb-1">
                           Mensagem a ser exibida
                         </label>
@@ -905,7 +927,12 @@ export default function Editor() {
                     onClick={() => {
                       const newMsgs = [
                         ...(quiz.scoreMessages || []),
-                        { minScore: 0, maxScore: 10, message: "" },
+                        {
+                          minScore: 0,
+                          maxScore: 10,
+                          message: "",
+                          genderFilter: "all",
+                        },
                       ];
                       setQuiz({ ...quiz, scoreMessages: newMsgs });
                     }}
